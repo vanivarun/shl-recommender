@@ -129,14 +129,19 @@ Now respond as the assistant. Return ONLY valid JSON in the exact format specifi
         end_of_conversation = parsed.get("end_of_conversation", False)
 
         valid_recs = []
-        for rec in recommendations[:10]:
+        seen_names = set()
+        for rec in recommendations:
+            if len(valid_recs) >= 10:
+                break
             if all(k in rec for k in ["name", "url", "test_type"]):
-                if "shl.com" in rec.get("url", ""):
+                name = rec["name"]
+                if "shl.com" in rec.get("url", "") and name not in seen_names:
                     valid_recs.append({
-                        "name": rec["name"],
+                        "name": name,
                         "url": rec["url"],
                         "test_type": rec["test_type"]
                     })
+                    seen_names.add(name)
 
         return {
             "reply": reply,
