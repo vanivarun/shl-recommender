@@ -20,9 +20,27 @@ def load_catalog():
 def build_index():
     global index, catalog, vectorizer
     catalog = load_catalog()
-    texts = [f"{item['name']}. {item['description']}" for item in catalog]
-    
-    vectorizer = TfidfVectorizer(max_features=512)
+    # Repeat name 3x to weight exact-name matches much higher than
+    # description-only overlap, and include a category hint so terms
+    # like "personality" / "cognitive ability" / "coding" match better.
+    type_hint = {
+        "A": "ability aptitude cognitive reasoning",
+        "B": "biodata situational judgment",
+        "C": "competency",
+        "D": "development 360 feedback",
+        "E": "assessment exercise simulation",
+        "K": "knowledge skills technical coding programming",
+        "P": "personality behavior traits",
+        "S": "simulation practical exercise",
+    }
+    texts = [
+        f"{item['name']} {item['name']} {item['name']}. "
+        f"{type_hint.get(item.get('test_type', ''), '')}. "
+        f"{item['description']}"
+        for item in catalog
+    ]
+
+    vectorizer = TfidfVectorizer(max_features=2000, ngram_range=(1, 2), stop_words="english")
     embeddings = vectorizer.fit_transform(texts).toarray().astype(np.float32)
     
     # Normalize
