@@ -96,7 +96,6 @@ def get_agent_response(messages: list) -> dict:
             if not any("opq32r" in r["name"].lower() for r in results):
                 opq_results = search("Occupational Personality Questionnaire OPQ32r", top_k=1)
                 results = results + opq_results
-            
             catalog_context = format_catalog_context(results)
 
         history_text = ""
@@ -151,6 +150,26 @@ Now respond as the assistant. Return ONLY valid JSON in the exact format specifi
                         "test_type": rec["test_type"]
                     })
                     seen_names.add(name)
+
+        # Deterministic fallback: ensure a personality assessment is present
+        # for non-pure-knowledge-screen scenarios, since the LLM doesn't
+        # reliably follow the prompt-level instruction alone.
+        has_personality = any(r["test_type"] == "P" for r in valid_recs)
+        is_pure_knowledge_screen = (
+            len(valid_recs) > 0 and
+            all(r["test_type"] == "K" for r in valid_recs) and
+            len(valid_recs) <= 2
+        )
+        if valid_recs and not has_personality and not is_pure_knowledge_screen and len(valid_recs) < 10:
+            opq_matches = search("Occupational Personality Questionnaire OPQ32r", top_k=1)
+            if opq_matches:
+                opq = opq_matches[0]
+                if opq["name"] not in seen_names:
+                    valid_recs.append({
+                        "name": opq["name"],
+                        "url": opq["url"],
+                        "test_type": opq["test_type"]
+                    })
 
         return {
             "reply": reply,
