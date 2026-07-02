@@ -64,7 +64,7 @@ def format_catalog_context(results: list) -> str:
         lines.append(f"- Name: {r['name']}")
         lines.append(f"  URL: {r['url']}")
         lines.append(f"  Type: {r['test_type']}")
-        lines.append(f"  Description: {r['description'][:200]}")
+        lines.append(f"  Description: {r['description'][:120]}")
     return "\n".join(lines)
 
 def extract_search_query(messages: list) -> str:
@@ -92,7 +92,7 @@ def get_agent_response(messages: list) -> dict:
         catalog_context = ""
         if should_search(messages):
             query = extract_search_query(messages)
-            results = search(query, top_k=15)
+            results = search(query, top_k=8)
             if not any("opq32r" in r["name"].lower() for r in results):
                 opq_results = search("Occupational Personality Questionnaire OPQ32r", top_k=1)
                 results = results + opq_results
@@ -120,7 +120,7 @@ Now respond as the assistant. Return ONLY valid JSON in the exact format specifi
             model="llama-3.1-8b-instant",
             messages=[{"role": "system", "content": prompt}],
             temperature=0.2,
-            max_tokens=1500,
+            max_tokens=700,
         )
 
         raw = response.choices[0].message.content.strip()
