@@ -2,56 +2,65 @@ import json
 import os
 import numpy as np
 import faiss
-from sentence_transformers import SentenceTransformer
+from sklearn.feature_extraction.text import TfidfVectorizer
+import pickle
 
 CATALOG_PATH = os.path.join(os.path.dirname(__file__), "../catalog/shl_catalog.json")
 INDEX_PATH = os.path.join(os.path.dirname(__file__), "../catalog/shl_index.faiss")
+VECTORIZER_PATH = os.path.join(os.path.dirname(__file__), "../catalog/vectorizer.pkl")
 
-model = None
 index = None
 catalog = None
+vectorizer = None
 
 def load_catalog():
     with open(CATALOG_PATH, "r") as f:
         return json.load(f)
 
-def get_model():
-    global model
-    if model is None:
-        model = SentenceTransformer("all-MiniLM-L6-v2")
-    return model
-
 def build_index():
-    global index, catalog
+    global index, catalog, vectorizer
     catalog = load_catalog()
-    m = get_model()
     texts = [f"{item['name']}. {item['description']}" for item in catalog]
-    embeddings = m.encode(texts, show_progress_bar=True, convert_to_numpy=True)
-    embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
+    
+    vectorizer = TfidfVectorizer(max_features=512)
+    embeddings = vectorizer.fit_transform(texts).toarray().astype(np.float32)
+    
+    # Normalize
+    norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+    norms[norms == 0] = 1
+    embeddings = embeddings / norms
+    
     dim = embeddings.shape[1]
     index = faiss.IndexFlatIP(dim)
-    index.add(embeddings.astype(np.float32))
+    index.add(embeddings)
+    
     faiss.write_index(index, INDEX_PATH)
+    with open(VECTORIZER_PATH, "wb") as f:
+        pickle.dump(vectorizer, f)
+    
     print(f"Index built with {len(catalog)} assessments")
-    return index
 
 def load_index():
-    global index, catalog
+    global index, catalog, vectorizer
     catalog = load_catalog()
-    if os.path.exists(INDEX_PATH):
+    if os.path.exists(INDEX_PATH) and os.path.exists(VECTORIZER_PATH):
         index = faiss.read_index(INDEX_PATH)
+        with open(VECTORIZER_PATH, "rb") as f:
+            vectorizer = pickle.load(f)
     else:
         build_index()
-    return index
 
 def search(query: str, top_k: int = 10) -> list:
-    global index, catalog
+    global index, catalog, vectorizer
     if index is None:
         load_index()
-    m = get_model()
-    q_vec = m.encode([query], convert_to_numpy=True)
-    q_vec = q_vec / np.linalg.norm(q_vec, axis=1, keepdims=True)
-    scores, indices = index.search(q_vec.astype(np.float32), top_k)
+    
+    q_vec = vectorizer.transform([query]).toarray().astype(np.float32)
+    norm = np.linalg.norm(q_vec)
+    if norm > 0:
+        q_vec = q_vec / norm
+    
+    scores, indices = index.search(q_vec, top_k)
     results = []
     for score, idx in zip(scores[0], indices[0]):
         if idx < len(catalog):
