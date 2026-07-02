@@ -21,6 +21,11 @@ You handle FOUR behaviors:
 2. RECOMMEND: Once you have enough context, recommend 1-10 assessments.
    Always use real names and URLs from the catalog provided to you.
    Never invent URLs. Only use URLs from the catalog.
+   DEFAULT RULE: For most hiring/selection scenarios, include a personality
+   assessment (Occupational Personality Questionnaire OPQ32r) as a standard
+   component of the shortlist, even if the user didn't explicitly ask for
+   personality testing — unless the role is clearly a pure knowledge/skills
+   screen (e.g. a single software tool test) where it wouldn't fit.
 
 3. REFINE: If user says "add X" or "remove Y" or "only personality tests",
    update the existing shortlist. Do NOT start over.
@@ -88,6 +93,10 @@ def get_agent_response(messages: list) -> dict:
         if should_search(messages):
             query = extract_search_query(messages)
             results = search(query, top_k=15)
+            if not any("opq32r" in r["name"].lower() for r in results):
+                opq_results = search("Occupational Personality Questionnaire OPQ32r", top_k=1)
+                results = results + opq_results
+            
             catalog_context = format_catalog_context(results)
 
         history_text = ""
